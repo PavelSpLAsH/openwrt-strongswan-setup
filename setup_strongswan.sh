@@ -13,20 +13,20 @@ else
     echo "wget уже установлен, продолжаю..."
 fi
 
-# Определяем WAN интерфейс и IP
-WAN_IF=$(ip route show default | grep -oP 'dev \K\S+')
-WAN_IP=$(ip addr show $WAN_IF | grep -oP 'inet \K\d+\.\d+\.\d+\.\d+')
+# Определяем WAN интерфейс и IP (без -P)
+WAN_IF=$(ip route show default | grep 'dev ' | awk '{print $5}')
+WAN_IP=$(ip addr show $WAN_IF | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
 
-# Определяем LAN интерфейс и подсеть
+# Определяем LAN интерфейс и подсеть (без -P)
 LAN_IF="br-lan"
-LAN_SUBNET=$(ip route show dev $LAN_IF | grep -oP '^\K\d+\.\d+\.\d+\.\d+/\d+' | head -1)
+LAN_SUBNET=$(ip route show dev $LAN_IF | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/[0-9]\+' | head -1)
 
-# Устанавливаем StrongSwan
+# Устанавливаем StrongSwan и дополнительные пакеты
 opkg update
-opkg install strongswan
+opkg install strongswan strongswan-default strongswan-mod-openssl
 
-# Генерируем случайный PSK
-PSK=$(openssl rand -base64 48)
+# Генерируем случайный PSK без openssl (используем /dev/urandom)
+PSK=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9+/=')
 
 # Запрашиваем у пользователя выбор
 echo "Настроить VPN для выхода в интернет через роутер:"
@@ -88,16 +88,16 @@ uci set firewall.@rule[-1].target='ACCEPT'
 if [ "$CHOICE" = "1" ]; then
     uci add firewall rule
     uci set firewall.@rule[-1].name='Allow-VPN-to-LAN'
-    uci set firewall.@rule[-1].src='ipsec'
+    uci set firewall.@rule[-1].src='wan'
     uci set firewall.@rule[-1].dest='lan'
     uci set firewall.@rule[-1].target='ACCEPT'
 fi
 
 # Настройка NAT для выхода в интернет
-uci set firewall.@zone[$(uci show firewall | grep -m 1 -B 1 ".name='wan'" | grep -o "@zone\[[0-1]\]")].masq='1'
+uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
 uci add firewall rule
 uci set firewall.@rule[-1].name='Masquerade-VPN-to-WAN'
-uci set firewall.@rule[-1].src='ipsec'
+uci set firewall.@rule[-1].src='wan'
 uci set firewall.@rule[-1].dest='wan'
 uci set firewall.@rule[-1].target='MASQUERADE'
 
