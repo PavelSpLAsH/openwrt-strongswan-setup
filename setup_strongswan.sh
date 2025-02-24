@@ -1,5 +1,18 @@
 #!/bin/sh
 
+# Проверка и установка dos2unix, если он не установлен
+if ! command -v dos2unix > /dev/null 2>&1; then
+    echo "dos2unix не найден, устанавливаю..."
+    opkg update
+    opkg install dos2unix
+    if [ $? -ne 0 ]; then
+        echo "Ошибка: не удалось установить dos2unix. Проверьте интернет-соединение и попробуйте снова."
+        exit 1
+    fi
+else
+    echo "dos2unix уже установлен, продолжаю..."
+fi
+
 # Проверка и установка wget, если он не установлен
 if ! command -v wget > /dev/null 2>&1; then
     echo "wget не найден, устанавливаю..."
