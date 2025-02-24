@@ -21,7 +21,7 @@ WAN_IP=$(ip addr show $WAN_IF | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
 LAN_IF="br-lan"
 LAN_SUBNET=$(ip route show dev $LAN_IF | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/[0-9]\+' | head -1)
 
-# Устанавливаем StrongSwan и дополнительные пакеты
+# Устанавливаем StrongSwan и необходимые пакеты
 opkg update
 opkg install strongswan strongswan-default strongswan-mod-openssl strongswan-charon
 
@@ -95,20 +95,24 @@ fi
 
 # Настройка NAT для VPN-клиентов через зону wan
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
-uci add firewall masquerade
-uci set firewall.@masquerade[-1].name='Masquerade-VPN'
-uci set firewall.@masquerade[-1].src='wan'
-uci set firewall.@masquerade[-1].dest='wan'
-uci set firewall.@masquerade[-1].target='MASQUERADE'
-uci set firewall.@masquerade[-1].enabled='1'
-uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
+uci add firewall zone
+uci set firewall.@zone[-1].name='vpn'
+uci set firewall.@zone[-1].input='ACCEPT'
+uci set firewall.@zone[-1].output='ACCEPT'
+uci set firewall.@zone[-1].forward='ACCEPT'
+uci set firewall.@zone[-1].network='ipsec0'
+uci set firewall.@zone[-1].masq='1'
+
+uci add firewall forwarding
+uci set firewall.@forwarding[-1].src='vpn'
+uci set firewall.@forwarding[-1].dest='wan'
 
 uci commit firewall
 /etc/init.d/firewall restart
 
 # Перезапускаем StrongSwan
 killall charon 2>/dev/null || true
-/usr/lib/ipsec/charon &
+/usr/libexec/ipsec/charon &
 
 # Выводим данные для клиента
 echo "Сервер VPN успешно настроен."
