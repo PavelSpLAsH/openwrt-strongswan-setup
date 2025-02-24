@@ -13,11 +13,11 @@ else
     echo "wget уже установлен, продолжаю..."
 fi
 
-# Определяем WAN интерфейс и IP (без -P)
+# Определяем WAN интерфейс и IP
 WAN_IF=$(ip route show default | grep 'dev ' | awk '{print $5}')
 WAN_IP=$(ip addr show $WAN_IF | grep 'inet ' | awk '{print $2}' | cut -d'/' -f1)
 
-# Определяем LAN интерфейс и подсеть (без -P)
+# Определяем LAN интерфейс и подсеть
 LAN_IF="br-lan"
 LAN_SUBNET=$(ip route show dev $LAN_IF | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-9]\+/[0-9]\+' | head -1)
 
@@ -25,7 +25,7 @@ LAN_SUBNET=$(ip route show dev $LAN_IF | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-
 opkg update
 opkg install strongswan strongswan-default strongswan-mod-openssl
 
-# Генерируем случайный PSK без openssl (используем /dev/urandom)
+# Генерируем случайный PSK
 PSK=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9+/=')
 
 # Запрашиваем у пользователя выбор
@@ -93,19 +93,20 @@ if [ "$CHOICE" = "1" ]; then
     uci set firewall.@rule[-1].target='ACCEPT'
 fi
 
-# Настройка NAT для выхода в интернет
+# Настройка NAT для VPN-клиентов через зону wan
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
-uci add firewall rule
-uci set firewall.@rule[-1].name='Masquerade-VPN-to-WAN'
-uci set firewall.@rule[-1].src='wan'
-uci set firewall.@rule[-1].dest='wan'
-uci set firewall.@rule[-1].target='MASQUERADE'
+uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq_src='10.10.10.0/24'
 
 uci commit firewall
 /etc/init.d/firewall restart
 
-# Перезапускаем StrongSwan
-/etc/init.d/ipsec restart
+# Перезапускаем StrongSwan (используем systemctl или charon напрямую, так как /etc/init.d/ipsec может отсутствовать)
+if [ -f /etc/init.d/strongswan ]; then
+    /etc/init.d/strongswan restart
+else
+    pkill charon
+    /usr/sbin/charon --use-syslog &
+fi
 
 # Выводим данные для клиента
 echo "Сервер VPN успешно настроен."
