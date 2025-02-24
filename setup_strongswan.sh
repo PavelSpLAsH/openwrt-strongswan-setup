@@ -131,7 +131,7 @@ if [ -f /etc/init.d/strongswan ]; then
     sleep 2
     swanctl --load-all
 else
-    echo "Ошибка: сервис StrongSwan не найден. Убедитесь, что он установлен."
+    echo "Ошибка: сервис StrongSwan не найден. Убедитесь, что установка прошла успешно."
     exit 1
 fi
 
