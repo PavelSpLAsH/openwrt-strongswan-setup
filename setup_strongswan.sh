@@ -99,12 +99,6 @@ secrets {
 }
 EOF
 
-# Настраиваем интерфейс для VPN-клиентов
-uci set network.vpn=interface
-uci set network.vpn.proto='none'
-uci set network.vpn.ipaddr='10.10.10.1'
-uci set network.vpn.netmask='255.255.255.0'
-
 # Настраиваем брандмауэр
 uci add firewall rule
 uci set firewall.@rule[-1].name='Allow-IPsec-500'
@@ -129,13 +123,15 @@ if [ "$CHOICE" = "1" ]; then
     uci set firewall.@rule[-1].target='ACCEPT'
 fi
 
-# Настройка NAT через зону wan
+# Настройка NAT через зону wan (без нового интерфейса)
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
-uci add_list firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].network='vpn'
+uci add firewall masquerade
+uci set firewall.@masquerade[-1].name='Masquerade-VPN'
+uci set firewall.@masquerade[-1].target='MASQUERADE'
+uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
+uci set firewall.@masquerade[-1].enabled='1'
 
-uci commit network
 uci commit firewall
-/etc/init.d/network restart
 /etc/init.d/firewall restart
 
 # Перезапускаем StrongSwan
