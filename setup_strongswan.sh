@@ -174,12 +174,12 @@ log "Перезапускаю firewall..."
 
 # Перезапускаем StrongSwan
 log "Перезапускаю StrongSwan..."
-if [ -f /etc/init.d/strongswan ]; then
-    /etc/init.d/strongswan restart || { log "Ошибка при перезапуске StrongSwan"; exit 1; }
+if [ -f /etc/init.d/swanctl ]; then
+    /etc/init.d/swanctl restart || { log "Ошибка при перезапуске swanctl"; exit 1; }
     sleep 5 # Увеличиваем время ожидания
     swanctl --load-all || { log "Ошибка при загрузке конфигурации swanctl"; exit 1; }
 else
-    log "Ошибка: сервис StrongSwan не найден. Убедитесь, что установка прошла успешно."
+    log "Ошибка: сервис swanctl не найден. Убедитесь, что установка прошла успешно."
     exit 1
 fi
 
