@@ -111,23 +111,28 @@ if [ "$CHOICE" = "1" ]; then
     uci set firewall.@rule[-1].target='ACCEPT'
 fi
 
-# Настройка NAT для VPN-клиентов через зону wan
+# Настройка NAT для VPN-клиентов
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
 uci add firewall masquerade
 uci set firewall.@masquerade[-1].name='Masquerade-VPN'
 uci set firewall.@masquerade[-1].target='MASQUERADE'
 uci set firewall.@masquerade[-1].src='wan'
+uci set firewall.@masquerade[-1].dest='*'
 uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
 uci set firewall.@masquerade[-1].enabled='1'
 
 uci commit firewall
 /etc/init.d/firewall restart
 
-# Перезапускаем StrongSwan через swanctl
-killall charon 2>/dev/null || true
-/usr/libexec/ipsec/charon &
-sleep 2
-swanctl --load-all
+# Перезапускаем StrongSwan
+if [ -f /etc/init.d/strongswan ]; then
+    /etc/init.d/strongswan restart
+else
+    killall charon 2>/dev/null || true
+    /usr/libexec/ipsec/charon &
+    sleep 2
+    swanctl --load-all
+fi
 
 # Выводим данные для клиента
 echo "Сервер VPN успешно настроен."
