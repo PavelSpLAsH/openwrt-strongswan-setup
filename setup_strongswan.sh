@@ -126,7 +126,13 @@ EOF
 # Настраиваем брандмауэр
 log "Настраиваю брандмауэр..."
 
-uci add firewall rule 2>/dev/null
+# Удаляем существующие правила (если они есть)
+uci del firewall.Allow-IPsec-500 2>/dev/null
+uci del firewall.Allow-IPsec-4500 2>/dev/null
+uci del firewall.Allow-VPN-to-LAN 2>/dev/null
+
+# Добавляем новые правила
+uci add firewall rule 2>/dev/null || { log "Ошибка при добавлении правила firewall"; exit 1; }
 uci set firewall.@rule[-1].name='Allow-IPsec-500'
 uci set firewall.@rule[-1].src='wan'
 uci set firewall.@rule[-1].proto='udp'
@@ -134,7 +140,7 @@ uci set firewall.@rule[-1].dest_port='500'
 uci set firewall.@rule[-1].target='ACCEPT'
 uci commit firewall || { log "Ошибка при настройке firewall"; exit 1; }
 
-uci add firewall rule 2>/dev/null
+uci add firewall rule 2>/dev/null || { log "Ошибка при добавлении правила firewall"; exit 1; }
 uci set firewall.@rule[-1].name='Allow-IPsec-4500'
 uci set firewall.@rule[-1].src='wan'
 uci set firewall.@rule[-1].proto='udp'
@@ -142,10 +148,9 @@ uci set firewall.@rule[-1].dest_port='4500'
 uci set firewall.@rule[-1].target='ACCEPT'
 uci commit firewall || { log "Ошибка при настройке firewall"; exit 1; }
 
-
 # Разрешаем трафик от VPN к LAN, если выбран доступ к локальным ресурсам
 if [ "$CHOICE" = "1" ]; then
-    uci add firewall rule 2>/dev/null
+    uci add firewall rule 2>/dev/null || { log "Ошибка при добавлении правила firewall"; exit 1; }
     uci set firewall.@rule[-1].name='Allow-VPN-to-LAN'
     uci set firewall.@rule[-1].src='wan'
     uci set firewall.@rule[-1].dest='lan'
@@ -157,7 +162,7 @@ fi
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
 uci commit firewall || { log "Ошибка при настройке firewall"; exit 1; }
 
-uci add firewall masquerade 2>/dev/null
+uci add firewall masquerade 2>/dev/null || { log "Ошибка при добавлении masquerade"; exit 1; }
 uci set firewall.@masquerade[-1].name='Masquerade-VPN'
 uci set firewall.@masquerade[-1].target='MASQUERADE'
 uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
@@ -188,5 +193,3 @@ echo "- Идентификатор клиента: используйте люб
 echo "$ACCESS_MESSAGE"
 
 log "Настройка StrongSwan завершена."
-echo "- Идентификатор клиента: используйте любое имя (например, 'myphone')"
-echo "$ACCESS_MESSAGE"
