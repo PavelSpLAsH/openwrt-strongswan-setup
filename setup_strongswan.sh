@@ -63,7 +63,6 @@ connections {
             ikev2-psk {
                 local_ts = $LEFT_SUBNET
                 remote_ts = 0.0.0.0/0
-                updown = "/usr/libexec/ipsec/_updown iptables"
                 esp_proposals = aes128-sha256
                 start_action = trap
             }
@@ -116,8 +115,6 @@ uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.'
 uci add firewall masquerade
 uci set firewall.@masquerade[-1].name='Masquerade-VPN'
 uci set firewall.@masquerade[-1].target='MASQUERADE'
-uci set firewall.@masquerade[-1].src='wan'
-uci set firewall.@masquerade[-1].dest='*'
 uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
 uci set firewall.@masquerade[-1].enabled='1'
 
@@ -129,7 +126,7 @@ if [ -f /etc/init.d/strongswan ]; then
     /etc/init.d/strongswan restart
 else
     killall charon 2>/dev/null || true
-    /usr/libexec/ipsec/charon &
+    /usr/sbin/charon &
     sleep 2
     swanctl --load-all
 fi
