@@ -23,7 +23,7 @@ LAN_SUBNET=$(ip route show dev $LAN_IF | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+\.[0-
 
 # Устанавливаем StrongSwan и необходимые пакеты
 opkg update
-opkg install strongswan strongswan-default strongswan-mod-openssl strongswan-charon
+opkg install strongswan strongswan-default strongswan-mod-openssl strongswan-charon strongswan-swanctl
 
 # Генерируем случайный PSK
 PSK=$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9+/=')
@@ -47,27 +47,45 @@ else
     ACCESS_MESSAGE="VPN-клиенты имеют доступ только к интернету через роутер ($WAN_IP)"
 fi
 
-# Создаем файл конфигурации /etc/ipsec.conf
-cat > /etc/ipsec.conf << EOF
-config setup
-    charondebug="ike 2, knl 2, cfg 2"
+# Создаем файл конфигурации /etc/swanctl/swanctl.conf
+cat > /etc/swanctl/swanctl.conf << EOF
+connections {
+    ikev2-psk {
+        local_addrs = $WAN_IP
+        local {
+            auth = psk
+            id = $WAN_IP
+        }
+        remote {
+            auth = psk
+        }
+        children {
+            ikev2-psk {
+                local_ts = $LEFT_SUBNET
+                remote_ts = 0.0.0.0/0
+                updown = "/usr/libexec/ipsec/_updown iptables"
+                esp_proposals = aes128-sha256
+                start_action = trap
+            }
+        }
+        version = 2
+        proposals = aes128-sha256-modp3072
+        pools = vpn_pool
+    }
+}
 
-conn ikev2-psk
-    keyexchange=ikev2
-    ike=aes128-sha256-modp3072!
-    esp=aes128-sha256!
-    left=$WAN_IP
-    leftid=$WAN_IP
-    leftsubnet=$LEFT_SUBNET
-    leftfirewall=yes
-    right=%any
-    rightauth=psk
-    rightsourceip=10.10.10.0/24
-    auto=add
+pools {
+    vpn_pool {
+        addrs = 10.10.10.0/24
+    }
+}
+
+secrets {
+    ike-psk {
+        secret = "$PSK"
+    }
+}
 EOF
-
-# Создаем файл с секретами /etc/ipsec.secrets
-echo "%any : PSK \"$PSK\"" > /etc/ipsec.secrets
 
 # Настраиваем брандмауэр
 uci add firewall rule
@@ -95,24 +113,21 @@ fi
 
 # Настройка NAT для VPN-клиентов через зону wan
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
-uci add firewall zone
-uci set firewall.@zone[-1].name='vpn'
-uci set firewall.@zone[-1].input='ACCEPT'
-uci set firewall.@zone[-1].output='ACCEPT'
-uci set firewall.@zone[-1].forward='ACCEPT'
-uci set firewall.@zone[-1].network='ipsec0'
-uci set firewall.@zone[-1].masq='1'
-
-uci add firewall forwarding
-uci set firewall.@forwarding[-1].src='vpn'
-uci set firewall.@forwarding[-1].dest='wan'
+uci add firewall masquerade
+uci set firewall.@masquerade[-1].name='Masquerade-VPN'
+uci set firewall.@masquerade[-1].target='MASQUERADE'
+uci set firewall.@masquerade[-1].src='wan'
+uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
+uci set firewall.@masquerade[-1].enabled='1'
 
 uci commit firewall
 /etc/init.d/firewall restart
 
-# Перезапускаем StrongSwan
+# Перезапускаем StrongSwan через swanctl
 killall charon 2>/dev/null || true
 /usr/libexec/ipsec/charon &
+sleep 2
+swanctl --load-all
 
 # Выводим данные для клиента
 echo "Сервер VPN успешно настроен."
