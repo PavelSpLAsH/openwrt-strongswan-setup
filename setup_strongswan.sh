@@ -110,27 +110,24 @@ if [ "$CHOICE" = "1" ]; then
     uci set firewall.@rule[-1].target='ACCEPT'
 fi
 
-# Создаем интерфейс для VPN-клиентов
-uci set network.vpn=interface
-uci set network.vpn.proto='none'
-uci set network.vpn.ipaddr='10.10.10.1'
-uci set network.vpn.netmask='255.255.255.0'
-
-# Привязываем интерфейс к зоне wan
+# Настройка NAT для VPN-клиентов в зоне wan
 uci set firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].masq='1'
-uci add_list firewall.@zone[$(uci show firewall | grep -m 1 ".name='wan'" | cut -d'.' -f1-2)].network='vpn'
+uci add firewall masquerade
+uci set firewall.@masquerade[-1].name='Masquerade-VPN'
+uci set firewall.@masquerade[-1].target='MASQUERADE'
+uci set firewall.@masquerade[-1].src_ip='10.10.10.0/24'
+uci set firewall.@masquerade[-1].enabled='1'
 
-uci commit network
 uci commit firewall
-/etc/init.d/network restart
 /etc/init.d/firewall restart
 
 # Перезапускаем StrongSwan
 if [ -f /etc/init.d/strongswan ]; then
     /etc/init.d/strongswan restart
 else
+    echo "Сервис StrongSwan не найден, пытаюсь запустить вручную..."
     killall charon 2>/dev/null || true
-    /usr/sbin/charon &
+    /usr/lib/ipsec/charon &
     sleep 2
     swanctl --load-all
 fi
